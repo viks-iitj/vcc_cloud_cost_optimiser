@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimization Results</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for better table appearance */
+        .table-container table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .table-container th, .table-container td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .table-container th {
+            background-color: #f8fafc;
+            font-weight: 600;
+        }
+        .table-container tr:last-child td {
+            border-bottom: none;
+        }
+        .table-container tr:hover {
+            background-color: #f1f5f9;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto px-4 py-12">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Optimization Results</h1>
+            <p class="mt-4 text-lg text-gray-600">Here are the most cost-effective infrastructure options for your workload.</p>
+        </header>
+
+        <!-- Best Offer Card -->
+        {% if best_offer %}
+        <section id="best-offer" class="mb-12">
+            <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-lg border-2 border-green-500">
+                <h2 class="text-2xl font-bold text-green-700 mb-2">🏆 Most Cost-Effective Solution</h2>
+                <p class="text-4xl font-bold text-gray-900 mb-4">${{ best_offer.total_price|round(2) }} <span class="text-xl font-medium text-gray-500">/ hour</span></p>
+                <div class="table-container overflow-x-auto">
+                    {{ best_offer.composition_table|safe }}
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Cost Comparison Chart -->
+        <section id="cost-comparison" class="mb-12">
+            <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
+                <h2 class="text-2xl font-semibold mb-4">Cost Comparison of Top 5 Offers</h2>
+                <canvas id="offersChart"></canvas>
+            </div>
+        </section>
+
+        <!-- All Offers Section -->
+        <section id="all-offers">
+            <h2 class="text-3xl font-bold text-center mb-8">All Potential Solutions</h2>
+            <div class="space-y-8">
+                {% for offer in fleet_offers %}
+                <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
+                    <div class="flex justify-between items-start">
+                        <h3 class="text-xl font-semibold">Solution #{{ loop.index }}</h3>
+                        <p class="text-2xl font-bold text-blue-600">${{ offer.total_price|round(2) }} <span class="text-lg font-medium text-gray-500">/ hour</span></p>
+                    </div>
+                    <p class="text-md text-gray-500 mb-4">Provider: {{ offer.provider }}</p>
+                    <div class="table-container overflow-x-auto">
+                        {{ offer.composition_table|safe }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <p class="text-xl text-gray-500">No offers were found.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <footer class="text-center mt-12">
+            <a href="/" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all">
+                Run Another Calculation
+            </a>
+        </footer>
+    </div>
+
+    <script>
+        // FIX: Manually build the chart data array instead of using the 'tojson' filter.
+        // This avoids JSON serialization errors caused by complex data (like embedded HTML)
+        // in the 'fleet_offers' object, which was the source of the SyntaxError.
+        try {
+            const offersData = [
+                {% for offer in fleet_offers %}
+                {
+                    "total_price": {{ offer.total_price if offer.total_price is defined else 0 }},
+                    "provider": "{{ offer.provider if offer.provider is defined else 'N/A' }}"
+                },
+                {% endfor %}
+            ];
+
+            // We'll take the top 5 offers for the chart for clarity
+            const topOffers = offersData.slice(0, 5);
+
+            const labels = topOffers.map((offer, index) => `Solution #${index + 1} (${offer.provider})`);
+            const data = topOffers.map(offer => offer.total_price);
+
+            const ctx = document.getElementById('offersChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Cost per Hour ($)',
+                        data: data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Cost ($/hour)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error("Error initializing chart:", e);
+            const chartContainer = document.getElementById('cost-comparison');
+            if(chartContainer) {
+                chartContainer.innerHTML = '<p class="text-center text-red-500">Could not load comparison chart due to a data error.</p>';
+            }
+        }
+    </script>
+
+</body>
+</html>
